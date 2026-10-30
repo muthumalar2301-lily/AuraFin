@@ -1,24 +1,24 @@
 import os
 import requests
 
+from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from datetime import date, timedelta
 from models import Transaction, Invoice
-from dotenv import load_dotenv
 
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 
+
 def generate_financial_advice(user_prompt: str, db: Session) -> str:
 
     if not GEMINI_API_KEY:
-        return "AI assistant is not configured. Please add the Gemini API key."
+        return "Gemini API key is missing. Please configure GEMINI_API_KEY."
 
     today = date.today()
 
-    # 1. Fetch financial records
     tx_records = db.query(Transaction).all()
     invoices = db.query(Invoice).all()
 
@@ -36,7 +36,6 @@ def generate_financial_advice(user_prompt: str, db: Session) -> str:
 
     current_cash = confirmed_income - confirmed_expenses
 
-    # 2. Upcoming expenses
     upcoming_expenses = [
         {
             "item": t.description,
@@ -51,7 +50,6 @@ def generate_financial_advice(user_prompt: str, db: Session) -> str:
         )
     ]
 
-    # 3. Pending PayPal invoices
     pending_invoices = [
         {
             "to": inv.recipient_email,
@@ -63,19 +61,14 @@ def generate_financial_advice(user_prompt: str, db: Session) -> str:
         if inv.status in ["SENT", "DRAFT"]
     ]
 
-    # 4. Financial context
     system_instruction = f"""
 You are AuraFin AI, an intelligent financial copilot
 for independent creators, freelancers, and artists.
 
-Your job is to provide practical, concise financial insights.
-
 CREATOR FINANCIAL SNAPSHOT:
 
 Current Liquid Cash: ${current_cash:.2f}
-
 Confirmed Income: ${confirmed_income:.2f}
-
 Confirmed Expenses: ${confirmed_expenses:.2f}
 
 Pending PayPal Invoices:
@@ -85,21 +78,17 @@ Scheduled Expenses (Next 30 Days):
 {upcoming_expenses}
 
 STRICT RULES:
-
-1. Base financial conclusions only on the supplied financial data.
+1. Base financial conclusions only on supplied data.
 2. Never invent transactions, balances, invoices, or dates.
-3. Clearly distinguish confirmed income from pending invoice amounts.
+3. Distinguish confirmed income from pending invoice amounts.
 4. Never count pending invoices as available cash.
-5. If cash is negative or upcoming expenses create a risk,
-   explain the risk and suggest practical actions.
-6. Give realistic recommendations for independent creators.
-7. If information is insufficient, explicitly say so.
-8. Do not claim to execute payments or modify financial records.
-9. Keep answers between 2 and 5 sentences.
-10. Use clear language and dollar amounts.
+5. Explain financial risks and suggest practical actions.
+6. If information is insufficient, explicitly say so.
+7. Never claim to execute payments or modify records.
+8. Keep answers between 2 and 5 sentences.
+9. Use clear language and dollar amounts.
 """
 
-    # 5. Call Gemini API
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/"
         f"models/{GEMINI_MODEL}:generateContent"
@@ -112,16 +101,12 @@ STRICT RULES:
 
     payload = {
         "system_instruction": {
-            "parts": [
-                {"text": system_instruction}
-            ]
+            "parts": [{"text": system_instruction}]
         },
         "contents": [
             {
                 "role": "user",
-                "parts": [
-                    {"text": user_prompt}
-                ]
+                "parts": [{"text": user_prompt}]
             }
         ],
         "generationConfig": {
@@ -147,10 +132,15 @@ STRICT RULES:
         return answer.strip()
 
     except requests.exceptions.Timeout:
-        return "The AI assistant took too long to respond. Please try again."
+        return "Gemini AI took too long to respond. Please try again."
 
-    except requests.exceptions.RequestException:
-        return "Unable to connect to the AI service. Please try again later."
+    except requests.exceptions.HTTPError as e:
+        print("Gemini API error:", e.response.text)
+        return "Gemini AI request failed. Check the backend logs."
+
+    except requests.exceptions.RequestException as e:
+        print("Gemini connection error:", str(e))
+        return "Unable to connect to Gemini AI. Please try again later."
 
     except (KeyError, IndexError, ValueError):
-        return "The AI service returned an unexpected response."
+        return "Gemini AI returned an unexpected response."
