@@ -111,7 +111,10 @@ STRICT RULES:
         ],
         "generationConfig": {
             "temperature": 0.2,
-            "maxOutputTokens": 400
+            "maxOutputTokens": 300,
+            "thinkingConfig": {
+                "thinkingLevel": "low"
+            }
         }
     }
 
@@ -120,7 +123,7 @@ STRICT RULES:
             url,
             headers=headers,
             json=payload,
-            timeout=45
+            timeout=60
         )
 
         response.raise_for_status()
