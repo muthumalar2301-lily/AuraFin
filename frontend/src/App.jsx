@@ -15,7 +15,10 @@ import { Line } from 'react-chartjs-2';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-const API_BASE = "http://127.0.0.1:8000/api";
+const API_BASE = (
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://aurafin-backend-3kwv.onrender.com"
+).replace(/\/+$/, "") + "/api";
 
 export default function App() {
   // Summary & Cash Flow State
@@ -100,7 +103,10 @@ export default function App() {
       const res = await axios.post(`${API_BASE}/assistant/chat`, { query: chatPrompt });
       setChatReply(res.data.reply);
     } catch (err) {
-      setChatReply("Error communicating with local AI model.");
+    setChatReply(
+      err.response?.data?.detail ||
+      "Unable to reach the AI assistant. Please try again."
+    );
     } finally {
       setChatLoading(false);
     }
